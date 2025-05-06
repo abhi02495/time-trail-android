@@ -37,9 +37,10 @@ const Login = () => {
       });
       navigate('/dashboard');
     } catch (error) {
+      console.error(error);
       toast({
         title: "Error",
-        description: "Invalid email or password",
+        description: error instanceof Error ? error.message : "Invalid email or password",
         variant: "destructive",
       });
     } finally {

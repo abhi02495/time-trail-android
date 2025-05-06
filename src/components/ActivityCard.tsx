@@ -3,7 +3,7 @@ import { Activity } from '@/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { formatDistanceToNow } from 'date-fns';
-import { calendar, checkCircle } from 'lucide-react';
+import { Calendar, CheckCircle } from 'lucide-react';
 import { getStreakCount } from '@/utils/activityUtils';
 import { cn } from '@/lib/utils';
 

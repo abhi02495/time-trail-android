@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -9,6 +8,7 @@ import NewActivityDialog from '@/components/NewActivityDialog';
 import { Activity } from '@/types';
 import { generateDemoActivities } from '@/utils/activityUtils';
 import { format } from 'date-fns';
+import { supabase } from '@/integrations/supabase/client';
 
 const Dashboard = () => {
   const [activities, setActivities] = useState<Activity[]>([]);
@@ -23,7 +23,8 @@ const Dashboard = () => {
       return;
     }
     
-    // Demo data
+    // For now, using demo data
+    // In future implementations, we'll fetch from Supabase
     const loadData = async () => {
       try {
         // Simulate API delay
@@ -43,8 +44,8 @@ const Dashboard = () => {
     loadData();
   }, [user, navigate, toast]);
   
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     navigate('/login');
   };
   
@@ -102,7 +103,7 @@ const Dashboard = () => {
         <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8 flex justify-between items-center">
           <h1 className="text-2xl font-bold text-teal-600">TimeTrail</h1>
           <div className="flex items-center gap-4">
-            <span className="text-sm text-gray-600">Hi, {user?.name}</span>
+            <span className="text-sm text-gray-600">Hi, {user?.name || 'User'}</span>
             <Button variant="outline" size="sm" onClick={handleLogout}>
               Log out
             </Button>

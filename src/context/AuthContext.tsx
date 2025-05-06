@@ -1,51 +1,73 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { User, Session } from '@supabase/supabase-js';
 
-type User = {
+type UserProfile = {
   id: string;
   name: string;
   email: string;
+  avatar_url?: string;
 };
 
 type AuthContextType = {
-  user: User | null;
+  user: UserProfile | null;
+  session: Session | null;
+  loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   signup: (name: string, email: string, password: string) => Promise<void>;
-  logout: () => void;
-  loading: boolean;
+  logout: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<UserProfile | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check if user is already logged in from localStorage
-    const storedUser = localStorage.getItem('user');
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
-    }
-    setLoading(false);
+    // Set up auth state listener FIRST
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        setSession(session);
+        if (session?.user) {
+          setUser({
+            id: session.user.id,
+            name: session.user.user_metadata.name || '',
+            email: session.user.email || '',
+            avatar_url: session.user.user_metadata.avatar_url
+          });
+        } else {
+          setUser(null);
+        }
+      }
+    );
+
+    // THEN check for existing session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      if (session?.user) {
+        setUser({
+          id: session.user.id,
+          name: session.user.user_metadata.name || '',
+          email: session.user.email || '',
+          avatar_url: session.user.user_metadata.avatar_url
+        });
+      }
+      setLoading(false);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
-  // In a real app, these functions would make API calls
   const login = async (email: string, password: string) => {
     setLoading(true);
     try {
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // For demo purposes, we'll create a mock user
-      const mockUser = {
-        id: '1',
-        name: 'Demo User',
-        email,
-      };
-      
-      setUser(mockUser);
-      localStorage.setItem('user', JSON.stringify(mockUser));
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
     } finally {
       setLoading(false);
     }
@@ -54,30 +76,33 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const signup = async (name: string, email: string, password: string) => {
     setLoading(true);
     try {
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // For demo purposes, create a new user
-      const newUser = {
-        id: Date.now().toString(),
-        name,
+      const { error } = await supabase.auth.signUp({
         email,
-      };
-      
-      setUser(newUser);
-      localStorage.setItem('user', JSON.stringify(newUser));
+        password,
+        options: {
+          data: {
+            name,
+            full_name: name,
+            username: email.split('@')[0],
+          }
+        }
+      });
+      if (error) throw error;
     } finally {
       setLoading(false);
     }
   };
 
-  const logout = () => {
-    setUser(null);
-    localStorage.removeItem('user');
+  const logout = async () => {
+    try {
+      await supabase.auth.signOut();
+    } catch (error) {
+      console.error('Error logging out:', error);
+    }
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, signup, logout, loading }}>
+    <AuthContext.Provider value={{ user, session, loading, login, signup, logout }}>
       {children}
     </AuthContext.Provider>
   );
