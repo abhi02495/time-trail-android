@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -6,43 +7,68 @@ import { useAuth } from '@/context/AuthContext';
 import ActivityCard from '@/components/ActivityCard';
 import NewActivityDialog from '@/components/NewActivityDialog';
 import { Activity } from '@/types';
-import { generateDemoActivities } from '@/utils/activityUtils';
 import { format } from 'date-fns';
-import { supabase } from '@/integrations/supabase/client';
+import { fetchActivities, createActivity, toggleStreak, fetchStreaks, formatStreaksForActivity } from '@/utils/api';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 const Dashboard = () => {
-  const [activities, setActivities] = useState<Activity[]>([]);
-  const [loading, setLoading] = useState(true);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   
   useEffect(() => {
     if (!user) {
       navigate('/login');
       return;
     }
-    
-    // For now, using demo data
-    // In future implementations, we'll fetch from Supabase
-    const loadData = async () => {
-      try {
-        // Simulate API delay
-        await new Promise(resolve => setTimeout(resolve, 500));
-        setActivities(generateDemoActivities());
-      } catch (error) {
-        toast({
-          title: "Error",
-          description: "Failed to load activities",
-          variant: "destructive",
-        });
-      } finally {
-        setLoading(false);
-      }
-    };
-    
-    loadData();
-  }, [user, navigate, toast]);
+  }, [user, navigate]);
+  
+  // Fetch activities with React Query
+  const { 
+    data: activities = [], 
+    isLoading, 
+    error 
+  } = useQuery({
+    queryKey: ['activities'],
+    queryFn: fetchActivities,
+    enabled: !!user
+  });
+
+  // Mutations for creating activities
+  const createActivityMutation = useMutation({
+    mutationFn: createActivity,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['activities'] });
+      toast({
+        title: "Activity created",
+        description: "Your new activity has been created successfully.",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error creating activity",
+        description: error instanceof Error ? error.message : "An unknown error occurred",
+        variant: "destructive",
+      });
+    }
+  });
+  
+  // Mutation for toggling streaks
+  const toggleStreakMutation = useMutation({
+    mutationFn: ({ activityId, date, completed }: { activityId: string, date: string, completed: boolean }) => 
+      toggleStreak(activityId, date, completed),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['activities'] });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error updating streak",
+        description: error instanceof Error ? error.message : "An unknown error occurred",
+        variant: "destructive",
+      });
+    }
+  });
   
   const handleLogout = async () => {
     await logout();
@@ -53,45 +79,38 @@ const Dashboard = () => {
     navigate(`/activity/${id}`);
   };
   
-  const handleAddActivity = (name: string, color: string) => {
-    const newActivity: Activity = {
-      id: Date.now().toString(),
-      name,
-      color,
-      streaks: {},
-      createdAt: new Date().toISOString()
-    };
-    
-    setActivities([newActivity, ...activities]);
-    
-    toast({
-      title: "Activity added",
-      description: `${name} has been added to your activities`,
-    });
+  const handleAddActivity = async (name: string, color: string) => {
+    createActivityMutation.mutate({ name, color });
   };
   
-  const handleToggleToday = (activityId: string) => {
-    setActivities(activities.map(activity => {
-      if (activity.id === activityId) {
-        const today = format(new Date(), 'yyyy-MM-dd');
-        return {
-          ...activity,
-          streaks: {
-            ...activity.streaks,
-            [today]: !activity.streaks[today]
-          }
-        };
-      }
-      return activity;
-    }));
+  const handleToggleToday = (activityId: string, currentValue: boolean) => {
+    const today = format(new Date(), 'yyyy-MM-dd');
+    toggleStreakMutation.mutate({ 
+      activityId, 
+      date: today, 
+      completed: !currentValue 
+    });
   };
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <div className="w-12 h-12 border-4 border-t-teal-500 border-gray-200 rounded-full animate-spin mx-auto"></div>
           <p className="mt-4 text-gray-600">Loading your activities...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-red-500 mb-4">Error loading activities</p>
+          <Button onClick={() => queryClient.invalidateQueries({ queryKey: ['activities'] })}>
+            Try Again
+          </Button>
         </div>
       </div>
     );
@@ -134,10 +153,13 @@ const Dashboard = () => {
           </div>
         ) : (
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {activities.map(activity => (
+            {activities.map((activity: any) => (
               <ActivityCard
                 key={activity.id}
-                activity={activity}
+                activity={{
+                  ...activity,
+                  streaks: {} // Pass empty streaks initially, will be populated in ActivityCard
+                }}
                 onClick={() => handleActivityClick(activity.id)}
               />
             ))}
@@ -149,9 +171,9 @@ const Dashboard = () => {
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
             <p className="text-gray-600 mb-4">Log today's activities:</p>
             <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-              {activities.map(activity => {
+              {activities.map((activity: any) => {
                 const today = format(new Date(), 'yyyy-MM-dd');
-                const isCompleted = activity.streaks[today];
+                const isCompleted = false; // We'll load this dynamically
                 
                 return (
                   <Button
@@ -162,7 +184,7 @@ const Dashboard = () => {
                         ? "bg-teal-600 hover:bg-teal-700" 
                         : "border-teal-600 text-teal-600 hover:bg-teal-50"
                     }`}
-                    onClick={() => handleToggleToday(activity.id)}
+                    onClick={() => handleToggleToday(activity.id, isCompleted)}
                   >
                     {isCompleted ? '✓ ' : ''}{activity.name}
                   </Button>

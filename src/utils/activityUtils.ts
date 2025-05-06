@@ -22,7 +22,18 @@ export const getStreakCount = (streaks: Record<string, boolean>): number => {
   return count;
 };
 
-// Generate random demo activities
+// Toggle an activity streak for a specific date
+export const toggleStreak = (
+  streaks: Record<string, boolean>,
+  dateStr: string
+): Record<string, boolean> => {
+  return {
+    ...streaks,
+    [dateStr]: !streaks[dateStr]
+  };
+};
+
+// This function is kept for compatibility but may not be used anymore
 export const generateDemoActivities = () => {
   const today = new Date();
   const activities = [
@@ -67,15 +78,4 @@ export const generateDemoActivities = () => {
   });
   
   return activities;
-};
-
-// Toggle an activity streak for a specific date
-export const toggleStreak = (
-  streaks: Record<string, boolean>,
-  dateStr: string
-): Record<string, boolean> => {
-  return {
-    ...streaks,
-    [dateStr]: !streaks[dateStr]
-  };
 };

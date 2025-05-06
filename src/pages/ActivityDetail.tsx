@@ -1,79 +1,122 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import { Activity, TimeView } from '@/types';
 import { useAuth } from '@/context/AuthContext';
-import { generateDemoActivities, toggleStreak } from '@/utils/activityUtils';
 import StreakCalendar from '@/components/StreakCalendar';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { fetchActivityById, fetchStreaks, toggleStreak, updateActivity, deleteActivity } from '@/utils/api';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 const ActivityDetail = () => {
   const { id } = useParams<{ id: string }>();
-  const [activity, setActivity] = useState<Activity | null>(null);
-  const [loading, setLoading] = useState(true);
   const [view, setView] = useState<TimeView>('week');
   const { user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   
-  useEffect(() => {
+  // Ensure user is authenticated
+  React.useEffect(() => {
     if (!user) {
       navigate('/login');
-      return;
     }
-    
-    const loadActivity = async () => {
-      try {
-        // Simulate API call
-        await new Promise(resolve => setTimeout(resolve, 500));
-        const activities = generateDemoActivities();
-        const found = activities.find(act => act.id === id);
-        
-        if (found) {
-          setActivity(found);
-        } else {
-          toast({
-            title: "Not found",
-            description: "Activity not found",
-            variant: "destructive",
-          });
-          navigate('/dashboard');
-        }
-      } catch (error) {
-        toast({
-          title: "Error",
-          description: "Failed to load activity",
-          variant: "destructive",
-        });
-      } finally {
-        setLoading(false);
-      }
-    };
-    
-    loadActivity();
-  }, [id, user, navigate, toast]);
+  }, [user, navigate]);
+  
+  // Fetch activity details
+  const { 
+    data: activity, 
+    isLoading: loadingActivity, 
+    error: activityError 
+  } = useQuery({
+    queryKey: ['activity', id],
+    queryFn: () => id ? fetchActivityById(id) : null,
+    enabled: !!id && !!user
+  });
+  
+  // Fetch streaks for this activity
+  const { 
+    data: streaks = [], 
+    isLoading: loadingStreaks 
+  } = useQuery({
+    queryKey: ['streaks', id],
+    queryFn: () => id ? fetchStreaks(id) : [],
+    enabled: !!id && !!user
+  });
+  
+  // Map streaks data to daily completion status
+  const streaksMap: Record<string, boolean> = {};
+  streaks.forEach((streak: any) => {
+    streaksMap[streak.date] = streak.completed;
+  });
+  
+  // Create complete activity object with streaks
+  const completeActivity = activity ? {
+    ...activity,
+    streaks: streaksMap
+  } : null;
+  
+  // Mutations
+  const toggleStreakMutation = useMutation({
+    mutationFn: ({ date, completed }: { date: string, completed: boolean }) => 
+      toggleStreak(id!, date, completed),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['streaks', id] });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error updating streak",
+        description: error instanceof Error ? error.message : "An unknown error occurred",
+        variant: "destructive",
+      });
+    }
+  });
+  
+  const deleteActivityMutation = useMutation({
+    mutationFn: () => deleteActivity(id!),
+    onSuccess: () => {
+      toast({
+        title: "Activity deleted",
+        description: "Activity has been successfully deleted",
+      });
+      navigate('/dashboard');
+    },
+    onError: (error) => {
+      toast({
+        title: "Error deleting activity",
+        description: error instanceof Error ? error.message : "An unknown error occurred",
+        variant: "destructive",
+      });
+    }
+  });
   
   const handleToggleToday = () => {
-    if (activity) {
+    if (id) {
       const today = format(new Date(), 'yyyy-MM-dd');
-      const updatedStreaks = toggleStreak(activity.streaks, today);
+      const isCompleted = streaksMap[today] || false;
       
-      setActivity({
-        ...activity,
-        streaks: updatedStreaks
+      toggleStreakMutation.mutate({ 
+        date: today, 
+        completed: !isCompleted 
       });
       
       toast({
-        title: updatedStreaks[today] ? "Completed" : "Marked as not done",
-        description: `${activity.name} for today has been updated`,
+        title: !isCompleted ? "Completed" : "Marked as not done",
+        description: `${activity?.name} for today has been updated`,
       });
     }
   };
+  
+  const handleDeleteActivity = () => {
+    if (confirm("Are you sure you want to delete this activity? This action cannot be undone.")) {
+      deleteActivityMutation.mutate();
+    }
+  };
 
-  if (loading) {
+  if (loadingActivity || loadingStreaks) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
@@ -84,7 +127,7 @@ const ActivityDetail = () => {
     );
   }
 
-  if (!activity) {
+  if (activityError || !activity) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
@@ -98,7 +141,7 @@ const ActivityDetail = () => {
   }
 
   const today = format(new Date(), 'yyyy-MM-dd');
-  const isCompletedToday = activity.streaks[today];
+  const isCompletedToday = streaksMap[today] || false;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -130,10 +173,10 @@ const ActivityDetail = () => {
                 <h2 className="text-xl font-bold">{activity.name}</h2>
               </div>
               <p className="text-gray-600 mt-1">
-                Started {new Date(activity.createdAt).toLocaleDateString()}
+                Started {new Date(activity.created_at).toLocaleDateString()}
               </p>
             </div>
-            <div className="mt-4 sm:mt-0">
+            <div className="mt-4 sm:mt-0 flex gap-2">
               <Button
                 className={cn(
                   isCompletedToday 
@@ -144,48 +187,71 @@ const ActivityDetail = () => {
               >
                 {isCompletedToday ? '✓ Completed Today' : 'Mark Complete for Today'}
               </Button>
+              <Button
+                variant="outline"
+                className="border-red-600 text-red-600 hover:bg-red-50"
+                onClick={handleDeleteActivity}
+              >
+                Delete
+              </Button>
             </div>
           </div>
         </div>
         
-        <div className="mb-6">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-semibold">Progress Overview</h3>
-              <div className="flex bg-gray-100 rounded-lg p-1">
-                {(['week', 'month', 'year'] as TimeView[]).map((viewOption) => (
-                  <button
-                    key={viewOption}
-                    className={`px-3 py-1 text-sm rounded-md ${
-                      view === viewOption 
-                        ? 'bg-white shadow-sm' 
-                        : 'text-gray-600'
-                    }`}
-                    onClick={() => setView(viewOption)}
-                  >
-                    {viewOption.charAt(0).toUpperCase() + viewOption.slice(1)}
-                  </button>
-                ))}
+        {completeActivity && (
+          <div className="mb-6">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-semibold">Progress Overview</h3>
+                <div className="flex bg-gray-100 rounded-lg p-1">
+                  {(['week', 'month', 'year'] as TimeView[]).map((viewOption) => (
+                    <button
+                      key={viewOption}
+                      className={`px-3 py-1 text-sm rounded-md ${
+                        view === viewOption 
+                          ? 'bg-white shadow-sm' 
+                          : 'text-gray-600'
+                      }`}
+                      onClick={() => setView(viewOption)}
+                    >
+                      {viewOption.charAt(0).toUpperCase() + viewOption.slice(1)}
+                    </button>
+                  ))}
+                </div>
               </div>
+              
+              <StreakCalendar activity={completeActivity} view={view} />
             </div>
-            
-            <StreakCalendar activity={activity} view={view} />
           </div>
-        </div>
+        )}
         
         <div className="grid gap-6 md:grid-cols-3">
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
             <h3 className="text-sm font-medium text-gray-500 mb-1">Current Streak</h3>
             <p className="text-3xl font-bold">
-              {Object.entries(activity.streaks)
-                .filter(([date, completed]) => completed)
-                .length} days
+              {(() => {
+                let count = 0;
+                let date = new Date();
+                let continuous = true;
+                
+                while (continuous) {
+                  const dateStr = format(date, 'yyyy-MM-dd');
+                  if (streaksMap[dateStr]) {
+                    count++;
+                    date.setDate(date.getDate() - 1);
+                  } else {
+                    continuous = false;
+                  }
+                }
+                
+                return count;
+              })()} days
             </p>
           </div>
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
             <h3 className="text-sm font-medium text-gray-500 mb-1">This Month</h3>
             <p className="text-3xl font-bold">
-              {Object.entries(activity.streaks)
+              {Object.entries(streaksMap)
                 .filter(([date, completed]) => {
                   const month = new Date().getMonth();
                   return completed && new Date(date).getMonth() === month;
@@ -196,7 +262,7 @@ const ActivityDetail = () => {
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
             <h3 className="text-sm font-medium text-gray-500 mb-1">Total Completions</h3>
             <p className="text-3xl font-bold">
-              {Object.values(activity.streaks).filter(Boolean).length}
+              {Object.values(streaksMap).filter(Boolean).length}
             </p>
           </div>
         </div>
