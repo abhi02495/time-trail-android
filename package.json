@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "homepage": "https://abhi02495.github.io/time-trail-android/",
+  "homepage": "https://abhi02495.github.io/time-trail-android",
   "scripts": {
     "predeploy": "npm run build",
     "deploy": "gh-pages -d build",
