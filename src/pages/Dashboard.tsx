@@ -79,8 +79,8 @@ const Dashboard = () => {
     navigate(`/activity/${id}`);
   };
   
-  const handleAddActivity = async (name: string, color: string) => {
-    createActivityMutation.mutate({ name, color });
+  const handleAddActivity = async (name: string, user_id: string, color: string) => {
+    createActivityMutation.mutate({ name, user_id, color });
   };
   
   const handleToggleToday = (activityId: string, currentValue: boolean) => {
@@ -154,6 +154,7 @@ const Dashboard = () => {
         ) : (
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {activities.map((activity: any) => (
+              
               <ActivityCard
                 key={activity.id}
                 activity={{

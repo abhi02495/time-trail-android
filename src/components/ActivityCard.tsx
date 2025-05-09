@@ -14,6 +14,7 @@ interface ActivityCardProps {
 }
 
 const ActivityCard = ({ activity, onClick }: ActivityCardProps) => {
+  
   const lastWeekDays = 7;
   const today = new Date();
   
@@ -65,7 +66,15 @@ const ActivityCard = ({ activity, onClick }: ActivityCardProps) => {
           <div>
             <CardTitle className="text-lg font-semibold">{activity.name}</CardTitle>
             <CardDescription>
-              Created {formatDistanceToNow(new Date(activity.createdAt), { addSuffix: true })}
+              Created {formatDistanceToNow(
+                new Date( +activity.created_at.substring(0,4), 
+                          +activity.created_at.substring(5,7)-1, 
+                          +activity.created_at.substring(8,10),
+                          +activity.created_at.substring(11,13),
+                          +activity.created_at.substring(14,16),
+                          +activity.created_at.substring(17,19),
+                        ).toUTCString(), 
+                  { addSuffix: true})}
             </CardDescription>
           </div>
           <Badge style={{ backgroundColor: activity.color }} className="text-white">

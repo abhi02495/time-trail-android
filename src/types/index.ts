@@ -5,7 +5,7 @@ export interface Activity {
   color: string;
   icon?: string;
   streaks: Record<string, boolean>;
-  createdAt: string;
+  created_at: string;
 }
 
 export type TimeView = 'week' | 'month' | 'year';

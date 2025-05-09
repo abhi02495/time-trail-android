@@ -5,17 +5,18 @@ import { format } from 'date-fns';
 
 // Activities API
 export const fetchActivities = async () => {
-  const { data, error } = await supabase
+  try{
+    const { data, error } = await supabase
     .from('activities')
     .select('*')
     .order('created_at', { ascending: false });
-    
-  if (error) {
+
+    return data || [];
+  }catch(error){
     console.error('Error fetching activities:', error);
     throw error;
   }
   
-  return data || [];
 };
 
 export const fetchActivityById = async (id: string) => {
@@ -33,7 +34,8 @@ export const fetchActivityById = async (id: string) => {
   return data;
 };
 
-export const createActivity = async (activity: { name: string; color: string; icon?: string }) => {
+export const createActivity = async (activity: { name: string; user_id: string, color: string; icon?: string }) => {
+  console.log("user id is ", activity.user_id);
   const { data, error } = await supabase
     .from('activities')
     .insert([activity])

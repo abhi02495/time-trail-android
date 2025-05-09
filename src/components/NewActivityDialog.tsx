@@ -1,9 +1,10 @@
 
-import React, { useState } from 'react';
+import React, { useContext, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/components/ui/use-toast';
+import { AuthContext } from '@/context/AuthContext';
 
 const colorOptions = [
   "#06b6d4", // teal
@@ -16,10 +17,11 @@ const colorOptions = [
 ];
 
 interface NewActivityDialogProps {
-  onSave: (name: string, color: string) => void;
+  onSave: (name: string, user_id: string, color: string) => void;
 }
 
 const NewActivityDialog = ({ onSave }: NewActivityDialogProps) => {
+  const {user} = useContext(AuthContext)
   const [name, setName] = useState('');
   const [selectedColor, setSelectedColor] = useState(colorOptions[0]);
   const [isOpen, setIsOpen] = useState(false);
@@ -37,7 +39,7 @@ const NewActivityDialog = ({ onSave }: NewActivityDialogProps) => {
       return;
     }
     
-    onSave(name, selectedColor);
+    onSave(name, user.id, selectedColor);
     setName('');
     setSelectedColor(colorOptions[0]);
     setIsOpen(false);
